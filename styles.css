@@ -75,24 +75,48 @@ select {
   display: grid;
   place-items: center;
   padding: 24px;
-  background: var(--bg);
+  background:
+    linear-gradient(135deg, rgba(18, 100, 163, 0.08), transparent 34%),
+    linear-gradient(180deg, var(--panel-soft), var(--bg));
+}
+
+.auth-overlay::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(18, 100, 163, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(18, 100, 163, 0.08) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.7), transparent 78%);
+  pointer-events: none;
 }
 
 .auth-card {
-  width: min(420px, 100%);
-  padding: 28px;
+  position: relative;
+  width: min(500px, 100%);
+  padding: 38px 36px 34px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: var(--panel);
-  box-shadow: 0 20px 50px rgba(23, 25, 28, 0.16);
+  background: color-mix(in srgb, var(--panel) 94%, transparent);
+  box-shadow: 0 24px 70px rgba(23, 25, 28, 0.2);
   text-align: center;
+  overflow: hidden;
+}
+
+.auth-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 4px;
+  background: linear-gradient(90deg, #111827, #d71920, #1264a3);
 }
 
 .auth-brand {
-  width: 180px;
-  height: 82px;
+  width: min(360px, 92%);
+  height: 160px;
   object-fit: contain;
-  margin-bottom: 10px;
+  margin-bottom: 14px;
 }
 
 [data-theme="dark"] .auth-brand {
@@ -103,34 +127,57 @@ select {
 }
 
 .auth-card h2 {
-  margin-bottom: 8px;
-  font-size: 22px;
+  margin-bottom: 10px;
+  font-size: 26px;
+  letter-spacing: 0;
 }
 
 .auth-card p {
-  margin-bottom: 18px;
+  margin-bottom: 22px;
   color: var(--muted);
+  line-height: 1.6;
 }
 
 .google-signin {
   display: flex;
   justify-content: center;
-  min-height: 44px;
+  min-height: 48px;
 }
 
 .firebase-signin-button {
-  min-width: 220px;
-  height: 44px;
-  border: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-width: 260px;
+  height: 48px;
+  border: 1px solid #d7dce2;
   border-radius: 999px;
-  background: #1a73e8;
-  color: #ffffff;
+  background: #ffffff;
+  color: #1f2328;
   font-weight: 700;
+  box-shadow: 0 10px 24px rgba(23, 25, 28, 0.12);
   cursor: pointer;
+  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
 }
 
 .firebase-signin-button:hover {
-  background: #1558b0;
+  border-color: #b8c0ca;
+  box-shadow: 0 14px 30px rgba(23, 25, 28, 0.18);
+  transform: translateY(-1px);
+}
+
+.google-logo {
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+}
+
+.google-logo svg {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .auth-message {

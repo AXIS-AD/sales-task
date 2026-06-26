@@ -262,7 +262,17 @@ function renderFirebaseSignInButton() {
   const button = document.createElement("button");
   button.className = "firebase-signin-button";
   button.type = "button";
-  button.textContent = "Googleでログイン";
+  button.innerHTML = `
+    <span class="google-logo" aria-hidden="true">
+      <svg viewBox="0 0 24 24" focusable="false">
+        <path fill="#4285f4" d="M22.6 12.2c0-.8-.1-1.5-.2-2.2H12v4.2h5.9c-.3 1.4-1 2.6-2.1 3.4v2.8h3.4c2-1.9 3.4-4.6 3.4-8.2z"></path>
+        <path fill="#34a853" d="M12 23c3 0 5.5-1 7.3-2.6l-3.4-2.8c-.9.6-2.2 1-3.9 1-3 0-5.5-2-6.4-4.7H2.1v2.9C3.9 20.5 7.7 23 12 23z"></path>
+        <path fill="#fbbc05" d="M5.6 13.9c-.2-.6-.3-1.2-.3-1.9s.1-1.3.3-1.9V7.2H2.1C1.4 8.6 1 10.2 1 12s.4 3.4 1.1 4.8l3.5-2.9z"></path>
+        <path fill="#ea4335" d="M12 5.4c1.6 0 3.1.6 4.2 1.6l3.1-3.1C17.5 2.1 15 1 12 1 7.7 1 3.9 3.5 2.1 7.2l3.5 2.9C6.5 7.4 9 5.4 12 5.4z"></path>
+      </svg>
+    </span>
+    <span>Googleでログイン</span>
+  `;
   button.addEventListener("click", signInWithFirebase);
   elements.googleSignIn.appendChild(button);
 }
