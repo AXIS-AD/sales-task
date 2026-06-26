@@ -5,7 +5,7 @@ service cloud.firestore {
     function isAllowedDomainUser() {
       return request.auth != null
         && request.auth.token.email_verified == true
-        && request.auth.token.email.matches('.*@shibuya-ad\\.com$');
+        && request.auth.token.email.matches('.*@shibuya-ad[.]com$');
     }
 
     match /salesTaskApps/{appId}/{document=**} {
