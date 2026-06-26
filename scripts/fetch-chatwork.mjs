@@ -385,9 +385,11 @@ const mergeTopics = [
   },
   {
     key: "line-scenario-cpf",
-    title: "LINEシナリオ/CPF介入の条件・開始時期を確認する",
+    title: "CPF/LINEシナリオ介入条件・開始時期・社内リソースを確認する",
     category: "条件交渉",
-    words: ["LINE", "シナリオ", "CPF", "予約率", "数値開示", "介入"]
+    words: ["LINE", "シナリオ", "CPF", "予約率", "数値開示", "介入", "社内リソース", "クリニック回答"],
+    crossRoom: true,
+    mergeWindowMinutes: 120
   },
   {
     key: "cr-regulation-ng",
@@ -415,9 +417,11 @@ function pickMergeTopic(text) {
 
 function shouldMergeCandidates(a, b) {
   if (!a.mergeTopic || !b.mergeTopic || a.mergeTopic !== b.mergeTopic) return false;
-  if (a.roomId !== b.roomId) return false;
+  const topic = mergeTopics.find((item) => item.key === a.mergeTopic);
+  if (!topic?.crossRoom && a.roomId !== b.roomId) return false;
   const diffMs = Math.abs(new Date(a.sentAt) - new Date(b.sentAt));
-  return diffMs <= 1000 * 60 * 90;
+  const mergeWindowMinutes = topic?.mergeWindowMinutes || 90;
+  return diffMs <= 1000 * 60 * mergeWindowMinutes;
 }
 
 function mergeCandidateGroup(group) {

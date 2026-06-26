@@ -418,7 +418,7 @@ function saveTaskNote(id, note) {
 }
 
 function taskKey(task) {
-  return task.sourceCandidateId || task.id;
+  return task.sourceCandidateId || task.id || task.candidateId;
 }
 
 function messageIdsForTask(task) {
@@ -426,6 +426,44 @@ function messageIdsForTask(task) {
     ...String(task.messageId || "").split(","),
     ...(task.mergedMessageIds || [])
   ].map((id) => String(id).trim()).filter(Boolean);
+}
+
+function roomIdForTask(task) {
+  if (task.roomId) return Number(task.roomId);
+  const match = String(task.chatworkUrl || task.href || "").match(/rid(\d+)/);
+  return match ? Number(match[1]) : 0;
+}
+
+function lineScenarioDuplicateKey(task) {
+  const text = `${task.body || ""}\n${task.originalBody || ""}\n${task.reviewReason || ""}`;
+  if (
+    text.includes("LINEシナリオ") &&
+    (text.includes("CPF") || text.includes("介入")) &&
+    (text.includes("クリニック回答") || text.includes("開始時期") || text.includes("社内リソース"))
+  ) {
+    return "topic:line-scenario-cpf";
+  }
+  return "";
+}
+
+function taskDuplicateKey(task) {
+  const lineKey = lineScenarioDuplicateKey(task);
+  if (lineKey) return lineKey;
+
+  const roomId = roomIdForTask(task);
+  const ids = messageIdsForTask(task);
+  if (roomId && ids.length) return `message:${roomId}:${[...new Set(ids)].sort().join(",")}`;
+
+  return `id:${taskKey(task)}`;
+}
+
+function taskArchivePriority(task, source) {
+  let priority = source === "current" ? 30 : source === "applied" ? 20 : 10;
+  const text = `${task.body || ""}\n${task.originalBody || ""}`;
+  if (text.includes("CPF/LINEシナリオ介入条件・開始時期・社内リソース")) priority += 60;
+  else if (text.includes("CPF/LINEシナリオ介入条件") || text.includes("クリニック回答")) priority += 50;
+  if (text.includes("pangleサーバー対策")) priority += 5;
+  return priority;
 }
 
 function currentCandidateForTask(task) {
@@ -458,9 +496,13 @@ function isAppliedCandidate(candidate) {
   if (isRestoredCandidate(candidate)) return false;
   if (state.appliedTasks[key]) return true;
   if (candidate.forcedTarget && getDecision(candidate) === "タスク候補") return true;
+  if (candidate.manualDecision && getDecision(candidate) === "タスク候補") return true;
   return Boolean(
     state.manualJudgments?.judgments?.some((judgment) => {
-      return judgment.decision === "タスク候補" && judgment.candidateId === key;
+      return judgment.decision === "タスク候補" && (
+        judgment.candidateId === key ||
+        taskDuplicateKey(judgment) === taskDuplicateKey(candidate)
+      );
     })
   );
 }
@@ -730,17 +772,38 @@ function deletedTaskArchive() {
 
 function taskArchive() {
   const items = new Map();
+  const duplicateKeys = new Map();
+  const priorities = new Map();
+
+  const setArchiveItem = (item, source) => {
+    const key = taskKey(item);
+    const duplicateKey = taskDuplicateKey(item);
+    const priority = taskArchivePriority(item, source);
+    const existingKey = duplicateKeys.get(duplicateKey);
+
+    if (existingKey && items.has(existingKey)) {
+      const existingPriority = priorities.get(existingKey) || 0;
+      if (priority < existingPriority) return;
+      items.delete(existingKey);
+      priorities.delete(existingKey);
+    }
+
+    items.set(key, item);
+    duplicateKeys.set(duplicateKey, key);
+    priorities.set(key, priority);
+  };
+
   for (const judgment of state.manualJudgments?.judgments || []) {
     if (judgment.decision !== "タスク候補") continue;
     if (state.deletedTasks[judgment.candidateId]) continue;
     if (state.restoredCandidates[judgment.candidateId]) continue;
     const item = manualTaskItem(judgment);
-    items.set(item.sourceCandidateId || item.id, item);
+    setArchiveItem(item, "manual");
   }
   for (const candidate of state.data?.candidates || []) {
     if (isDeletedCandidate(candidate)) continue;
     if (getDecision(candidate) !== "タスク候補" || !isAppliedCandidate(candidate)) continue;
-    items.set(candidate.id, candidate);
+    setArchiveItem(candidate, "current");
   }
   const candidatesById = new Map((state.data?.candidates || []).map((candidate) => [candidate.id, candidate]));
   for (const item of Object.values(state.appliedTasks)) {
@@ -754,7 +817,7 @@ function taskArchive() {
     const localDecision = localDecisionFor(key);
     if (localDecision && localDecision !== "タスク候補") continue;
     if (!localDecision && manualDecision && manualDecision !== "タスク候補") continue;
-    items.set(key, item);
+    setArchiveItem(item, "applied");
   }
   return [...items.values()];
 }
