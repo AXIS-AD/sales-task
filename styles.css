@@ -53,7 +53,7 @@ body {
 
 body.auth-pending {
   min-height: 100vh;
-  overflow: hidden;
+  overflow: auto;
 }
 
 body.auth-pending .topbar,
@@ -75,6 +75,7 @@ select {
   display: grid;
   place-items: center;
   padding: 24px;
+  overflow: auto;
   background:
     linear-gradient(135deg, rgba(18, 100, 163, 0.08), transparent 34%),
     linear-gradient(180deg, var(--panel-soft), var(--bg));
@@ -110,6 +111,16 @@ select {
   inset: 0 0 auto;
   height: 4px;
   background: linear-gradient(90deg, #111827, #d71920, #1264a3);
+}
+
+.auth-theme-button {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  z-index: 1;
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  box-shadow: 0 12px 30px rgba(23, 25, 28, 0.12);
+  backdrop-filter: blur(10px);
 }
 
 .auth-brand {
@@ -1360,5 +1371,85 @@ textarea {
 
   .request-grid {
     display: block;
+  }
+}
+
+@media (max-width: 560px) {
+  .auth-overlay {
+    padding: 64px 14px 18px;
+    place-items: start center;
+  }
+
+  .auth-overlay::before {
+    background-size: 36px 36px;
+  }
+
+  .auth-theme-button {
+    top: 12px;
+    right: 12px;
+    padding: 7px 10px;
+  }
+
+  .auth-card {
+    width: 100%;
+    padding: 30px 20px 26px;
+  }
+
+  .auth-brand {
+    width: min(300px, 96%);
+    height: 130px;
+    margin-bottom: 12px;
+  }
+
+  .auth-card h2 {
+    font-size: 22px;
+    line-height: 1.35;
+  }
+
+  .auth-card p {
+    margin-bottom: 18px;
+    font-size: 14px;
+  }
+
+  .firebase-signin-button {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 380px) {
+  .auth-card {
+    padding: 26px 16px 22px;
+  }
+
+  .auth-brand {
+    width: min(260px, 96%);
+    height: 116px;
+  }
+
+  .auth-card h2 {
+    font-size: 20px;
+  }
+}
+
+@media (max-height: 620px) {
+  .auth-overlay {
+    align-items: start;
+    padding-top: 56px;
+    padding-bottom: 16px;
+  }
+
+  .auth-card {
+    padding-top: 24px;
+    padding-bottom: 22px;
+  }
+
+  .auth-brand {
+    height: 112px;
+    margin-bottom: 8px;
+  }
+
+  .auth-card p {
+    margin-bottom: 14px;
   }
 }

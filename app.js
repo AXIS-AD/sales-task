@@ -134,6 +134,7 @@ const elements = {
   requestView: document.querySelector("#requestView"),
   dashboardBody: document.querySelector("#dashboardBody"),
   themeButton: document.querySelector("#themeButton"),
+  authThemeButton: document.querySelector("#authThemeButton"),
   requestForm: document.querySelector("#requestForm"),
   requestRequester: document.querySelector("#requestRequester"),
   requestBody: document.querySelector("#requestBody"),
@@ -365,8 +366,11 @@ async function signOut() {
 
 function applyTheme() {
   document.documentElement.dataset.theme = state.theme;
-  elements.themeButton.setAttribute("aria-pressed", String(state.theme === "dark"));
-  elements.themeButton.lastChild.textContent = state.theme === "dark" ? "ライト" : "ダーク";
+  [elements.themeButton, elements.authThemeButton].forEach((button) => {
+    if (!button) return;
+    button.setAttribute("aria-pressed", String(state.theme === "dark"));
+    button.lastChild.textContent = state.theme === "dark" ? "ライト" : "ダーク";
+  });
 }
 
 function toggleTheme() {
@@ -2083,6 +2087,7 @@ document.querySelector("#reloadButton").addEventListener("click", loadData);
 document.querySelector("#resetButton").addEventListener("click", resetDecisions);
 document.querySelector("#applyButton").addEventListener("click", applyDecisions);
 elements.themeButton.addEventListener("click", toggleTheme);
+elements.authThemeButton.addEventListener("click", toggleTheme);
 elements.signOutButton.addEventListener("click", signOut);
 elements.requestForm.addEventListener("submit", handleRequestSubmit);
 elements.ruleForm.addEventListener("submit", handleRuleSubmit);
