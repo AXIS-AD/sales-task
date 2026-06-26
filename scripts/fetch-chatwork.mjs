@@ -7,6 +7,46 @@ if (!token) {
   process.exit(1);
 }
 
+const retryableStatuses = new Set([408, 429, 500, 502, 503, 504]);
+const fetchErrors = [];
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function retryDelay(attempt, response) {
+  const retryAfter = response?.headers?.get?.("retry-after");
+  const retryAfterSeconds = Number(retryAfter);
+  if (Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0) {
+    return Math.min(retryAfterSeconds * 1000, 30000);
+  }
+  return Math.min(1000 * 2 ** attempt, 10000);
+}
+
+async function fetchJsonWithRetry(url, options, label, attempts = 4) {
+  let lastError;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      const response = await fetch(url, options);
+      if (response.ok) return response.json();
+
+      const body = await response.text();
+      const error = new Error(`${label}: ${response.status} ${body}`);
+      error.status = response.status;
+      error.response = response;
+      if (!retryableStatuses.has(response.status) || attempt === attempts - 1) throw error;
+      lastError = error;
+      await sleep(retryDelay(attempt, response));
+    } catch (error) {
+      lastError = error;
+      if (error.status && !retryableStatuses.has(error.status)) throw error;
+      if (attempt === attempts - 1) throw error;
+      await sleep(retryDelay(attempt));
+    }
+  }
+  throw lastError;
+}
+
 const rooms = [
   { id: 411043022, name: "【ASP】※ABCクリニック専用　アクシス（Pino）×ミチガエル（PG）", confidence: "high" },
   { id: 323899466, name: "【ASP】アクシス×ミチガエル(PG)", confidence: "candidate" },
@@ -763,37 +803,41 @@ function assessWithContext(candidate) {
 async function fetchRoomMessages(room) {
   const url = new URL(`https://api.chatwork.com/v2/rooms/${room.id}/messages`);
   url.searchParams.set("force", "1");
-  const response = await fetch(url, {
-    headers: { "X-ChatWorkToken": token }
-  });
-
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`${room.name}: ${response.status} ${body}`);
-  }
-
-  const messages = await response.json();
+  const messages = await fetchJsonWithRetry(
+    url,
+    { headers: { "X-ChatWorkToken": token } },
+    room.name
+  );
   return messages.map((message) => ({ room, message }));
 }
 
 async function fetchSingleMessage(room, messageId) {
-  const response = await fetch(`https://api.chatwork.com/v2/rooms/${room.id}/messages/${messageId}`, {
-    headers: { "X-ChatWorkToken": token }
-  });
-
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`${room.name} ${messageId}: ${response.status} ${body}`);
-  }
-
-  return { room, message: await response.json() };
+  const message = await fetchJsonWithRetry(
+    `https://api.chatwork.com/v2/rooms/${room.id}/messages/${messageId}`,
+    { headers: { "X-ChatWorkToken": token } },
+    `${room.name} ${messageId}`
+  );
+  return { room, message };
 }
 
 const allMessages = [];
 for (const room of rooms) {
-  const messages = await fetchRoomMessages(room);
-  const sorted = messages.sort((a, b) => a.message.send_time - b.message.send_time);
-  allMessages.push(...sorted);
+  try {
+    const messages = await fetchRoomMessages(room);
+    const sorted = messages.sort((a, b) => a.message.send_time - b.message.send_time);
+    allMessages.push(...sorted);
+  } catch (error) {
+    fetchErrors.push({
+      roomId: room.id,
+      roomName: room.name,
+      scope: "room",
+      message: error.message
+    });
+    if (room.confidence === "high") {
+      throw new Error(`required room fetch failed: ${error.message}`);
+    }
+    console.warn(`optional room skipped: ${error.message}`);
+  }
 }
 
 const candidates = [];
@@ -810,7 +854,18 @@ for (const target of forcedTargetMessages) {
   const list = messagesByRoom.get(room.id) || [];
   for (const messageId of forcedTargetMessageIds(target)) {
     if (!list.some((item) => String(item.message.message_id) === messageId)) {
-      list.push(await fetchSingleMessage(room, messageId));
+      try {
+        list.push(await fetchSingleMessage(room, messageId));
+      } catch (error) {
+        fetchErrors.push({
+          roomId: room.id,
+          roomName: room.name,
+          scope: "forced-target",
+          messageId,
+          message: error.message
+        });
+        console.warn(`forced target skipped: ${error.message}`);
+      }
     }
   }
   list.sort((a, b) => a.message.send_time - b.message.send_time);
@@ -823,7 +878,18 @@ for (const target of completionEvidenceTargets) {
   const list = messagesByRoom.get(room.id) || [];
   for (const messageId of target.messageIds || [target.messageId]) {
     if (!list.some((item) => String(item.message.message_id) === String(messageId))) {
-      list.push(await fetchSingleMessage(room, messageId));
+      try {
+        list.push(await fetchSingleMessage(room, messageId));
+      } catch (error) {
+        fetchErrors.push({
+          roomId: room.id,
+          roomName: room.name,
+          scope: "completion-evidence",
+          messageId,
+          message: error.message
+        });
+        console.warn(`completion evidence skipped: ${error.message}`);
+      }
     }
   }
   list.sort((a, b) => a.message.send_time - b.message.send_time);
@@ -1112,6 +1178,7 @@ const output = {
     rule: "個人チャットは全投稿対象。その他ルームは松﨑からの送信、松﨑宛てTo、または松﨑への返信のうち、ABC/ミチガエル/エックスラボ/Xラボ/YA/ワイエージェンシー/長径/包茎などの関連語を含む投稿を対象"
   },
   rooms,
+  syncWarnings: fetchErrors,
   categories: categories.map((category) => category.name),
   manualJudgments: manualResult.summary,
   excludedCandidates: {

@@ -12,6 +12,44 @@ const candidatePath = [...appPath, "data", "current"];
 const manualJudgmentPath = [...appPath, "data", "manualJudgments"];
 const localCandidatePath = join(process.cwd(), "public", "data", "candidates.json");
 const localManualJudgmentPath = join(process.cwd(), "public", "data", "manual-judgments.json");
+const retryableStatuses = new Set([408, 429, 500, 502, 503, 504]);
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function retryDelay(attempt, response) {
+  const retryAfter = response?.headers?.get?.("retry-after");
+  const retryAfterSeconds = Number(retryAfter);
+  if (Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0) {
+    return Math.min(retryAfterSeconds * 1000, 30000);
+  }
+  return Math.min(1000 * 2 ** attempt, 10000);
+}
+
+async function fetchWithRetry(url, options = {}, label = String(url), attempts = 4) {
+  let lastError;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      const response = await fetch(url, options);
+      if (response.ok || response.status === 404) return response;
+
+      const body = await response.text();
+      const error = new Error(`${label}: ${response.status} ${body}`);
+      error.status = response.status;
+      error.response = response;
+      if (!retryableStatuses.has(response.status) || attempt === attempts - 1) throw error;
+      lastError = error;
+      await sleep(retryDelay(attempt, response));
+    } catch (error) {
+      lastError = error;
+      if (error.status && !retryableStatuses.has(error.status)) throw error;
+      if (attempt === attempts - 1) throw error;
+      await sleep(retryDelay(attempt));
+    }
+  }
+  throw lastError;
+}
 
 function base64url(input) {
   return Buffer.from(input)
@@ -21,7 +59,7 @@ function base64url(input) {
     .replace(/\//g, "_");
 }
 
-function loadServiceAccount() {
+async function loadServiceAccount() {
   const rawJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON || process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
   if (rawJson) return JSON.parse(rawJson);
 
@@ -29,20 +67,11 @@ function loadServiceAccount() {
   if (rawBase64) return JSON.parse(Buffer.from(rawBase64, "base64").toString("utf8"));
 
   if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-    return JSON.parse(existsSync(process.env.GOOGLE_APPLICATION_CREDENTIALS)
-      ? readFile(process.env.GOOGLE_APPLICATION_CREDENTIALS, "utf8")
-      : "{}");
+    const raw = await readFile(process.env.GOOGLE_APPLICATION_CREDENTIALS, "utf8");
+    return JSON.parse(raw);
   }
 
   throw new Error("FIREBASE_SERVICE_ACCOUNT_JSON is not set.");
-}
-
-async function loadServiceAccountAsync() {
-  if (!process.env.GOOGLE_APPLICATION_CREDENTIALS || process.env.FIREBASE_SERVICE_ACCOUNT_JSON || process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON) {
-    return loadServiceAccount();
-  }
-  const raw = await readFile(process.env.GOOGLE_APPLICATION_CREDENTIALS, "utf8");
-  return JSON.parse(raw);
 }
 
 function createJwt(serviceAccount) {
@@ -63,14 +92,14 @@ function createJwt(serviceAccount) {
 }
 
 async function getAccessToken(serviceAccount) {
-  const response = await fetch("https://oauth2.googleapis.com/token", {
+  const response = await fetchWithRetry("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
       grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
       assertion: createJwt(serviceAccount)
     })
-  });
+  }, "OAuth token");
   if (!response.ok) {
     throw new Error(`OAuth token request failed: ${response.status} ${await response.text()}`);
   }
@@ -125,9 +154,9 @@ function firestoreUrl(projectId, pathSegments) {
 }
 
 async function getFirestoreDocument({ accessToken, projectId, pathSegments }) {
-  const response = await fetch(firestoreUrl(projectId, pathSegments), {
+  const response = await fetchWithRetry(firestoreUrl(projectId, pathSegments), {
     headers: { Authorization: `Bearer ${accessToken}` }
-  });
+  }, `Firestore get ${pathSegments.join("/")}`);
   if (response.status === 404) return null;
   if (!response.ok) {
     throw new Error(`Firestore get failed: ${response.status} ${await response.text()}`);
@@ -137,7 +166,7 @@ async function getFirestoreDocument({ accessToken, projectId, pathSegments }) {
 }
 
 async function setFirestoreDocument({ accessToken, projectId, pathSegments, data }) {
-  const response = await fetch(firestoreUrl(projectId, pathSegments), {
+  const response = await fetchWithRetry(firestoreUrl(projectId, pathSegments), {
     method: "PATCH",
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -148,7 +177,7 @@ async function setFirestoreDocument({ accessToken, projectId, pathSegments, data
         Object.entries(data).map(([key, value]) => [key, toFirestoreValue(value)])
       )
     })
-  });
+  }, `Firestore write ${pathSegments.join("/")}`);
   if (!response.ok) {
     throw new Error(`Firestore write failed: ${response.status} ${await response.text()}`);
   }
@@ -193,7 +222,7 @@ async function main() {
     throw new Error("CHATWORK_API_TOKEN is not set.");
   }
 
-  const serviceAccount = await loadServiceAccountAsync();
+  const serviceAccount = await loadServiceAccount();
   const projectId = process.env.FIREBASE_PROJECT_ID || serviceAccount.project_id;
   if (!projectId) throw new Error("Firebase project id could not be resolved.");
 
