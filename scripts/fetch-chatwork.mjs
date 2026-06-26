@@ -395,7 +395,8 @@ const mergeTopics = [
     key: "cr-regulation-ng",
     title: "CRレギュレーション・NG戻し・制作費請求条件を整理する",
     category: "クリエイティブ/LP/訴求確認",
-    words: ["CR", "レギュ", "NG", "戻し", "制作料", "キャスティング", "横山の本編"]
+    words: ["CR", "レギュ", "NG", "戻し", "制作料", "キャスティング", "横山の本編"],
+    reviewOnlyCrossRoom: true
   },
   {
     key: "link-redirect-mico",
@@ -415,19 +416,34 @@ function pickMergeTopic(text) {
   return best;
 }
 
+function mergeTopicByKey(key) {
+  return mergeTopics.find((item) => item.key === key);
+}
+
 function shouldMergeCandidates(a, b) {
   if (!a.mergeTopic || !b.mergeTopic || a.mergeTopic !== b.mergeTopic) return false;
-  const topic = mergeTopics.find((item) => item.key === a.mergeTopic);
-  if (!topic?.crossRoom && a.roomId !== b.roomId) return false;
+  const topic = mergeTopicByKey(a.mergeTopic);
+  if (!topic) return false;
+  if (a.roomId !== b.roomId && (topic.crossRoom === false || topic.reviewOnlyCrossRoom)) return false;
   const diffMs = Math.abs(new Date(a.sentAt) - new Date(b.sentAt));
   const mergeWindowMinutes = topic?.mergeWindowMinutes || 90;
+  return diffMs <= 1000 * 60 * mergeWindowMinutes;
+}
+
+function shouldTagCrossRoomReview(a, b) {
+  if (!a.mergeTopic || !b.mergeTopic || a.mergeTopic !== b.mergeTopic) return false;
+  if (a.roomId === b.roomId) return false;
+  const topic = mergeTopicByKey(a.mergeTopic);
+  if (!topic?.reviewOnlyCrossRoom) return false;
+  const diffMs = Math.abs(new Date(a.sentAt) - new Date(b.sentAt));
+  const mergeWindowMinutes = topic.mergeWindowMinutes || 90;
   return diffMs <= 1000 * 60 * mergeWindowMinutes;
 }
 
 function mergeCandidateGroup(group) {
   if (group.length === 1) return group[0];
   const sorted = [...group].sort((a, b) => a.sentAt.localeCompare(b.sentAt));
-  const topic = mergeTopics.find((item) => item.key === sorted[0].mergeTopic);
+  const topic = mergeTopicByKey(sorted[0].mergeTopic);
   const body = topic?.title || sorted[0].body;
   const first = sorted[0];
   const last = sorted.at(-1);
@@ -1123,6 +1139,31 @@ function mergeRelatedCandidates(items) {
   return groups.map(mergeCandidateGroup).sort((a, b) => b.sentAt.localeCompare(a.sentAt));
 }
 
+function applyCrossRoomReviewTags(items) {
+  const reviewIds = new Set();
+
+  for (let i = 0; i < items.length; i += 1) {
+    for (let j = i + 1; j < items.length; j += 1) {
+      if (shouldTagCrossRoomReview(items[i], items[j])) {
+        reviewIds.add(items[i].id);
+        reviewIds.add(items[j].id);
+      }
+    }
+  }
+
+  return items.map((candidate) => {
+    if (!reviewIds.has(candidate.id)) return candidate;
+    const topic = mergeTopicByKey(candidate.mergeTopic);
+    const existingStatus = normalizeTaskStatus(candidate.manualTaskStatus);
+    return {
+      ...candidate,
+      manualTaskStatus: existingStatus.type ? existingStatus : { type: "要確認", other: "" },
+      signals: [...new Set([...(candidate.signals || []), "ルーム跨ぎ要確認"])],
+      reviewReason: appendReviewReason(candidate, `ルーム跨ぎの同一論点候補（${topic?.title || candidate.mergeTopic}）。自動統合せず要確認タグを付与`)
+    };
+  });
+}
+
 function completionEvidenceByTarget(messagesByRoom) {
   const map = new Map();
   for (const target of completionEvidenceTargets) {
@@ -1166,7 +1207,8 @@ function applyCompletionEvidence(candidate, evidenceMap) {
 
 const correctedCandidates = applySpecificTitleCorrections(deduped);
 const sameMessageMergedCandidates = mergeSameMessageRequests(correctedCandidates);
-const mergedCandidates = mergeRelatedCandidates(sameMessageMergedCandidates);
+const crossRoomReviewedCandidates = applyCrossRoomReviewTags(sameMessageMergedCandidates);
+const mergedCandidates = mergeRelatedCandidates(crossRoomReviewedCandidates);
 const learnedCandidates = mergedCandidates.map(applyLearnedDecisionRules);
 const manualJudgments = await loadManualJudgments();
 const manualResult = applyManualJudgments(learnedCandidates, manualJudgments);
