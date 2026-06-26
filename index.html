@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ABCクリニック 営業タスク</title>
+    <link rel="stylesheet" href="./styles.css">
+    <script src="./config.js"></script>
+  </head>
+  <body class="auth-pending">
+    <section id="authOverlay" class="auth-overlay" aria-live="polite">
+      <div class="auth-card">
+        <img class="auth-brand" src="./assets/ozu-spirit.png?v=transparent" alt="営業部 〜ゾスの精神〜">
+        <h2>ABCクリニック 営業タスク</h2>
+        <p>@shibuya-ad.com のGoogleアカウントでログインしてください。</p>
+        <div id="googleSignIn" class="google-signin"></div>
+        <p id="authMessage" class="auth-message"></p>
+      </div>
+    </section>
+
+    <header class="topbar">
+      <img class="brand-image" src="./assets/ozu-spirit.png?v=transparent" alt="営業部 〜ゾスの精神〜">
+      <div>
+        <h1>ABCクリニック 営業タスク</h1>
+      </div>
+      <div class="toolbar">
+        <span id="signedInUser" class="signed-in-user"></span>
+        <button id="signOutButton" class="hidden" type="button">ログアウト</button>
+        <button id="themeButton" type="button" aria-pressed="false"><span class="theme-icon" aria-hidden="true"></span>ダーク</button>
+        <button id="reloadButton" class="task-management-action hidden" type="button">更新</button>
+        <button id="resetButton" class="task-management-action hidden" type="button">判断リセット</button>
+        <button id="applyButton" class="task-management-action hidden" type="button">判断結果を反映</button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <aside class="sidebar">
+        <section>
+          <h2>メニュー</h2>
+          <nav class="sidebar-nav" aria-label="画面切替">
+            <button class="sidebar-nav-button active" data-section="dashboard" type="button"><span class="nav-icon" aria-hidden="true">🖋️</span><span>ダッシュボード</span></button>
+            <button class="sidebar-nav-button" data-section="request" type="button"><span class="nav-icon" aria-hidden="true">🆕</span><span>依頼</span></button>
+            <button class="sidebar-nav-button" data-section="taskManagement" type="button"><span class="nav-icon" aria-hidden="true">📅</span><span>タスク管理</span></button>
+          </nav>
+        </section>
+
+        <section class="task-management-sidebar">
+          <h2>集計</h2>
+          <div class="stats">
+            <div><span id="statCandidates">0</span><small>候補</small></div>
+            <div><span id="statTasks">0</span><small>残す</small></div>
+            <div><span id="statPending">0</span><small>確認必要</small></div>
+          </div>
+        </section>
+
+        <section class="task-management-sidebar">
+          <h2>フィルタ</h2>
+          <label>ステータス
+            <select id="statusFilter">
+              <option value="all">すべて</option>
+              <option value="タスク候補">タスク候補</option>
+              <option value="不要">不要</option>
+              <option value="確認必要">確認必要</option>
+            </select>
+          </label>
+          <label>カテゴリ
+            <select id="categoryFilter">
+              <option value="all">すべて</option>
+            </select>
+          </label>
+          <label>検索
+            <input id="searchInput" type="search" placeholder="本文・ルーム・投稿者">
+          </label>
+        </section>
+
+        <details class="sidebar-details task-management-sidebar">
+          <summary>対象ルーム</summary>
+          <ul id="roomList" class="room-list"></ul>
+        </details>
+      </aside>
+
+      <section class="content">
+        <section id="taskManagementView" class="hidden">
+          <nav class="tabs" aria-label="表示切替">
+            <button class="tab active" data-tab="tasks" type="button">タスク一覧</button>
+            <button class="tab" data-tab="candidates" type="button">候補確認</button>
+            <button class="tab" data-tab="deleted" type="button">削除済みタスク</button>
+          </nav>
+
+          <section class="insight-panel task-management-rule-panel">
+            <h2>学習ルール</h2>
+            <form id="ruleForm" class="rule-form">
+              <input id="rulePhrase" type="text" placeholder="例: 他ご依頼">
+              <select id="ruleOutcome">
+                <option value="タスク化しない">タスク化しない</option>
+                <option value="文言補正">文言補正</option>
+                <option value="統合候補">統合候補</option>
+              </select>
+              <button type="submit">追加</button>
+            </form>
+            <div id="ruleList" class="insight-list"></div>
+          </section>
+
+          <div id="candidateView" class="hidden">
+            <div id="emptyState" class="empty">Chatwork候補データがまだありません。`npm run fetch:chatwork` で取得します。</div>
+            <div id="candidateList" class="list"></div>
+          </div>
+
+          <div id="taskView">
+            <div id="taskList" class="list"></div>
+          </div>
+
+          <div id="deletedView" class="hidden">
+            <div id="deletedList" class="list"></div>
+          </div>
+        </section>
+
+        <section id="dashboardView">
+          <div class="dashboard-command">
+            <div id="dashboardSummary" class="dashboard-summary"></div>
+            <div class="dashboard-view-switch" aria-label="ダッシュボード表示切替">
+              <button class="dashboard-view-button active" data-dashboard-view="table" type="button">一覧</button>
+              <button class="dashboard-view-button" data-dashboard-view="kanban" type="button">カンバン</button>
+            </div>
+          </div>
+
+          <div class="dashboard-insights">
+            <section class="insight-panel">
+              <h2>重複統合候補</h2>
+              <div id="duplicateList" class="insight-list"></div>
+            </section>
+            <section class="insight-panel">
+              <h2>同期ログ</h2>
+              <div id="syncLog" class="insight-list"></div>
+            </section>
+          </div>
+
+          <div id="dashboardTableView" class="dashboard-table-wrap">
+            <table class="dashboard-table">
+              <thead>
+                <tr>
+                  <th>タスク内容</th>
+                  <th>ボール先</th>
+                  <th>次アクション</th>
+                  <th>ステータス</th>
+                  <th>期日</th>
+                </tr>
+              </thead>
+              <tbody id="dashboardBody"></tbody>
+            </table>
+          </div>
+          <div id="dashboardKanbanView" class="dashboard-kanban hidden"></div>
+        </section>
+
+        <section id="requestView" class="hidden">
+          <form id="requestForm" class="request-form">
+            <label>依頼者
+              <input id="requestRequester" type="text" autocomplete="name" required>
+            </label>
+            <label>内容
+              <textarea id="requestBody" rows="5" required></textarea>
+            </label>
+            <div class="request-grid">
+              <label>優先度
+                <select id="requestPriority" required>
+                  <option value="">選択</option>
+                  <option value="高">高</option>
+                  <option value="中">中</option>
+                  <option value="低">低</option>
+                </select>
+              </label>
+              <label>期日
+                <input id="requestDueDate" type="date" required>
+              </label>
+            </div>
+            <div class="form-actions">
+              <button type="submit">依頼を追加</button>
+              <p id="requestMessage" class="form-message" aria-live="polite"></p>
+            </div>
+          </form>
+        </section>
+      </section>
+    </main>
+
+    <template id="candidateTemplate">
+      <article class="task-card">
+        <div class="task-head">
+          <div class="task-title">
+            <div class="meta"></div>
+            <div class="category-line">
+              <h3></h3>
+              <span class="scope-pill"></span>
+            </div>
+          </div>
+          <label class="task-status">ステータス
+            <select class="task-status-select">
+              <option value="">不明</option>
+              <option value="営業部ボール">営業部ボール</option>
+              <option value="先方確認中">先方確認中</option>
+              <option value="その他">その他(自由入力)</option>
+              <option value="重複">重複</option>
+            </select>
+            <input class="task-status-other" type="text" placeholder="ステータスを入力">
+          </label>
+        </div>
+        <div class="task-main">
+          <div class="task-copy">
+            <p class="body"></p>
+          </div>
+        </div>
+        <details class="source-panel">
+          <summary>チャット本文</summary>
+          <p class="source-body"></p>
+        </details>
+        <label class="task-note-label">備考
+          <textarea class="task-note" rows="3" placeholder="補足・次アクション・確認メモ"></textarea>
+        </label>
+        <div class="actions">
+          <button data-decision="タスク候補" type="button"><span class="action-icon keep" aria-hidden="true"></span>残す</button>
+          <button data-decision="不要" type="button"><span class="action-icon remove" aria-hidden="true"></span>不要</button>
+          <button data-decision="確認必要" type="button"><span class="action-icon review" aria-hidden="true"></span>確認必要</button>
+          <a class="chatwork-link" target="_blank" rel="noreferrer"><span class="chatwork-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>Chatworkリンク</a>
+        </div>
+      </article>
+    </template>
+
+    <aside id="taskDetailPanel" class="task-detail-panel hidden" aria-live="polite">
+      <div class="task-detail-card">
+        <button id="detailCloseButton" class="detail-close" type="button">閉じる</button>
+        <div id="taskDetailContent"></div>
+      </div>
+    </aside>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
