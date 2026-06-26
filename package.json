@@ -1,0 +1,12 @@
+{
+  "name": "abc-chatwork-task-prototype",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node scripts/serve.mjs",
+    "fetch:chatwork": "node scripts/fetch-chatwork.mjs",
+    "sync:chatwork-firestore": "node scripts/sync-chatwork-firestore.mjs",
+    "deploy:firebase": "firebase deploy --only hosting,firestore:rules"
+  }
+}

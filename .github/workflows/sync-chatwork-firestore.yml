@@ -1,0 +1,27 @@
+name: Sync Chatwork Tasks
+
+on:
+  schedule:
+    # JST 09:00 / 19:00
+    - cron: "0 0,10 * * *"
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Sync Chatwork to Firestore
+        run: npm run sync:chatwork-firestore
+        env:
+          CHATWORK_API_TOKEN: ${{ secrets.CHATWORK_API_TOKEN }}
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          FIRESTORE_APP_PATH: salesTaskApps/abcClinic
