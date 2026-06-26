@@ -1173,6 +1173,18 @@ textarea {
   font-weight: 700;
 }
 
+.pickup-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--warn) 12%, var(--panel));
+  color: var(--warn);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .task-status {
   justify-self: end;
   width: 100%;

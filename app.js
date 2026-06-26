@@ -667,6 +667,7 @@ function archiveCandidate(candidate) {
   return {
     ...candidate,
     archivedAt: new Date().toISOString(),
+    pickedAt: candidate.pickedAt || state.data?.generatedAt || "",
     sourceCandidateId: candidate.id,
     decision: "不要",
     metaLabel: candidate.metaLabel || `${formatDate(candidate.sentAt)} / ${candidate.accountName} / ${candidate.roomName}`,
@@ -681,6 +682,7 @@ function archiveCompletedTask(task) {
     id: taskKey(task),
     sourceCandidateId: taskKey(task),
     completedAt: new Date().toISOString(),
+    pickedAt: task.pickedAt || state.data?.generatedAt || task.appliedAt || "",
     decision: "完了済み",
     metaLabel: task.metaLabel || `${formatDate(task.sentAt)} / ${task.accountName} / ${task.roomName}`,
     manualTaskStatus: getTaskStatus(task),
@@ -692,6 +694,7 @@ function archiveTaskCandidate(candidate) {
   return {
     ...candidate,
     appliedAt: new Date().toISOString(),
+    pickedAt: candidate.pickedAt || state.data?.generatedAt || "",
     sourceCandidateId: candidate.id,
     decision: "タスク候補",
     metaLabel: candidate.metaLabel || `${formatDate(candidate.sentAt)} / ${candidate.accountName} / ${candidate.roomName}`,
@@ -737,6 +740,7 @@ function manualDeletedTask(judgment) {
     scopeReason: meta.accountName.includes("松﨑") ? "松﨑から送信" : "",
     manualTaskStatus: judgment.taskStatus || { type: "", other: "" },
     manualTaskNote: "",
+    pickedAt: state.manualJudgments?.generatedAt || "",
     archivedAt: state.manualJudgments?.generatedAt || ""
   };
 }
@@ -759,8 +763,13 @@ function manualTaskItem(judgment) {
     scopeReason: meta.accountName.includes("松﨑") ? "松﨑から送信" : "",
     manualTaskStatus: judgment.taskStatus || { type: "", other: "" },
     manualTaskNote: "",
+    pickedAt: state.manualJudgments?.generatedAt || "",
     appliedAt: state.manualJudgments?.generatedAt || ""
   };
+}
+
+function storedPickedAt(item) {
+  return item?.pickedAt || item?.appliedAt || item?.archivedAt || item?.completedAt || item?.restoredAt || "";
 }
 
 function deletedTaskArchive() {
@@ -792,8 +801,16 @@ function taskArchive() {
     const existingKey = duplicateKeys.get(duplicateKey);
 
     if (existingKey && items.has(existingKey)) {
+      const existingItem = items.get(existingKey);
+      const preservedPickedAt = storedPickedAt(existingItem) || storedPickedAt(item);
       const existingPriority = priorities.get(existingKey) || 0;
-      if (priority < existingPriority) return;
+      if (priority < existingPriority) {
+        if (preservedPickedAt && !existingItem.pickedAt) {
+          items.set(existingKey, { ...existingItem, pickedAt: preservedPickedAt });
+        }
+        return;
+      }
+      if (preservedPickedAt && !item.pickedAt) item = { ...item, pickedAt: preservedPickedAt };
       items.delete(existingKey);
       priorities.delete(existingKey);
     }
@@ -1250,6 +1267,16 @@ function displayScopeReason(candidate) {
   return "";
 }
 
+function pickedAtLabel(candidate) {
+  const pickedAt = candidate.pickedAt
+    || candidate.detectedAt
+    || storedPickedAt(candidate)
+    || state.data?.generatedAt
+    || state.manualJudgments?.generatedAt
+    || "";
+  return pickedAt ? `吸い上げ: ${formatDate(pickedAt)}` : "";
+}
+
 function filteredCandidates() {
   const candidates = candidateArchive();
   const status = elements.statusFilter.value;
@@ -1282,6 +1309,13 @@ function renderCandidate(candidate, options = {}) {
   const scopeLabel = displayScopeReason(candidate);
   scopePill.textContent = scopeLabel;
   scopePill.classList.toggle("hidden", !scopeLabel);
+  const pickedAt = pickedAtLabel(candidate);
+  if (pickedAt) {
+    const pickedPill = document.createElement("span");
+    pickedPill.className = "pickup-pill";
+    pickedPill.textContent = pickedAt;
+    scopePill.insertAdjacentElement("afterend", pickedPill);
+  }
   node.querySelector(".body").textContent = candidate.body;
 
   const taskStatus = getTaskStatus(candidate);
