@@ -29,6 +29,7 @@ let pendingRemotePatch = {};
 const state = {
   data: null,
   manualJudgments: null,
+  syncHealth: null,
   decisions: JSON.parse(localStorage.getItem(decisionStorageKey) || "{}"),
   taskStatuses: JSON.parse(localStorage.getItem(taskStatusStorageKey) || "{}"),
   taskNotes: JSON.parse(localStorage.getItem(taskNoteStorageKey) || "{}"),
@@ -1426,16 +1427,38 @@ function renderSyncLog() {
   const excluded = state.data?.excludedCandidates?.count || 0;
   const matched = state.data?.manualJudgments?.matchedCandidates || 0;
   const total = state.data?.manualJudgments?.totalJudgments || 0;
+  const health = state.syncHealth || null;
   elements.syncLog.innerHTML = "";
-  [
+
+  const lines = [
     `最終取得: ${generatedAt}`,
     `対象ルーム: ${rooms}`,
     `表示候補: ${visible}`,
     `不要除外: ${excluded}`,
     `手動判断反映: ${matched}/${total}`
-  ].forEach((text) => {
+  ].map((text) => ({ text, className: "sync-line" }));
+
+  if (health?.status === "error") {
+    lines.unshift({
+      text: `同期状態: エラー / ${health.message || "Chatwork APIトークンを確認してください。"}`,
+      className: "sync-line sync-line--error"
+    });
+    if (health.recovery) {
+      lines.splice(1, 0, {
+        text: `対応: ${health.recovery}`,
+        className: "sync-line sync-line--error"
+      });
+    }
+  } else if (health?.status === "ok") {
+    lines.unshift({
+      text: `Chatworkトークン: 確認済み${health.checkedAt ? ` ${formatDate(health.checkedAt)}` : ""}`,
+      className: "sync-line sync-line--ok"
+    });
+  }
+
+  lines.forEach(({ text, className }) => {
     const item = document.createElement("p");
-    item.className = "sync-line";
+    item.className = className;
     item.textContent = text;
     elements.syncLog.appendChild(item);
   });
@@ -1920,18 +1943,21 @@ async function loadFirestoreData() {
   if (!state.firestoreDb) {
     state.data = emptyData();
     state.manualJudgments = null;
+    state.syncHealth = null;
     state.dataLoaded = true;
     render();
     showAuthMessage("Firestoreに接続できていません。Firebase設定を確認してください。");
     return;
   }
-  const [candidateSnapshot, judgmentSnapshot, sharedStateSnapshot] = await Promise.all([
+  const [candidateSnapshot, judgmentSnapshot, syncHealthSnapshot, sharedStateSnapshot] = await Promise.all([
     state.firebaseModules.getDoc(firestoreDocRef("data", "current")),
     state.firebaseModules.getDoc(firestoreDocRef("data", "manualJudgments")),
+    state.firebaseModules.getDoc(firestoreDocRef("data", "syncHealth")),
     state.firebaseModules.getDoc(firestoreDocRef("state", "shared"))
   ]);
   state.data = candidateSnapshot.exists() ? candidateSnapshot.data() : emptyData();
   state.manualJudgments = judgmentSnapshot.exists() ? judgmentSnapshot.data() : null;
+  state.syncHealth = syncHealthSnapshot.exists() ? syncHealthSnapshot.data() : null;
   if (sharedStateSnapshot.exists()) applyRemoteState(sharedStateSnapshot.data());
   state.dataLoaded = true;
   render();

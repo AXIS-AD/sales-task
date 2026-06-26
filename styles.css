@@ -646,6 +646,16 @@ textarea {
   font-size: 12px;
 }
 
+.sync-line--ok {
+  color: #17803a;
+  font-weight: 700;
+}
+
+.sync-line--error {
+  color: #c23030;
+  font-weight: 700;
+}
+
 .text-button {
   justify-content: flex-start;
   width: 100%;

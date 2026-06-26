@@ -10,6 +10,7 @@ const appPath = (process.env.FIRESTORE_APP_PATH || "salesTaskApps/abcClinic")
   .filter(Boolean);
 const candidatePath = [...appPath, "data", "current"];
 const manualJudgmentPath = [...appPath, "data", "manualJudgments"];
+const syncHealthPath = [...appPath, "data", "syncHealth"];
 const localCandidatePath = join(process.cwd(), "public", "data", "candidates.json");
 const localManualJudgmentPath = join(process.cwd(), "public", "data", "manual-judgments.json");
 const retryableStatuses = new Set([408, 429, 500, 502, 503, 504]);
@@ -184,6 +185,54 @@ async function setFirestoreDocument({ accessToken, projectId, pathSegments, data
   return response.json();
 }
 
+async function setSyncHealth({ accessToken, projectId, data }) {
+  await setFirestoreDocument({
+    accessToken,
+    projectId,
+    pathSegments: syncHealthPath,
+    data: {
+      updatedAt: new Date().toISOString(),
+      ...data
+    }
+  });
+}
+
+function makeChatworkTokenError(message, code = "CHATWORK_TOKEN_INVALID") {
+  const error = new Error(message);
+  error.healthCode = code;
+  return error;
+}
+
+async function verifyChatworkToken() {
+  if (!process.env.CHATWORK_API_TOKEN) {
+    throw makeChatworkTokenError(
+      "CHATWORK_API_TOKEN is not set. Update the GitHub Actions secret CHATWORK_API_TOKEN.",
+      "CHATWORK_TOKEN_MISSING"
+    );
+  }
+
+  try {
+    const response = await fetchWithRetry("https://api.chatwork.com/v2/me", {
+      headers: { "X-ChatWorkToken": process.env.CHATWORK_API_TOKEN }
+    }, "Chatwork token check");
+
+    if (!response.ok) {
+      throw makeChatworkTokenError(
+        "Chatwork API token check failed. Update the GitHub Actions secret CHATWORK_API_TOKEN."
+      );
+    }
+
+    return response.json();
+  } catch (error) {
+    if (error.status === 401 || error.status === 403) {
+      throw makeChatworkTokenError(
+        "Chatwork API token is invalid or expired. Update the GitHub Actions secret CHATWORK_API_TOKEN."
+      );
+    }
+    throw error;
+  }
+}
+
 async function run(command, args, options = {}) {
   await new Promise((resolve, reject) => {
     const child = spawn(command, args, {
@@ -218,15 +267,36 @@ async function ensureManualJudgments(accessToken, projectId) {
 }
 
 async function main() {
-  if (!process.env.CHATWORK_API_TOKEN) {
-    throw new Error("CHATWORK_API_TOKEN is not set.");
-  }
-
   const serviceAccount = await loadServiceAccount();
   const projectId = process.env.FIREBASE_PROJECT_ID || serviceAccount.project_id;
   if (!projectId) throw new Error("Firebase project id could not be resolved.");
 
   const accessToken = await getAccessToken(serviceAccount);
+
+  let chatworkAccount;
+  try {
+    chatworkAccount = await verifyChatworkToken();
+  } catch (error) {
+    const message = error.healthCode
+      ? "Chatwork APIトークンが未設定、無効、または失効しています。GitHub Actions secret の CHATWORK_API_TOKEN を更新してください。"
+      : "Chatwork APIトークンの検証中にエラーが発生しました。GitHub Actions のログを確認してください。";
+    await setSyncHealth({
+      accessToken,
+      projectId,
+      data: {
+        status: "error",
+        code: error.healthCode || "CHATWORK_TOKEN_CHECK_FAILED",
+        message,
+        checkedAt: new Date().toISOString(),
+        recovery: "GitHub > AXIS-AD/sales-task > Settings > Secrets and variables > Actions > CHATWORK_API_TOKEN を新しいChatwork APIトークンで更新"
+      }
+    });
+    if (error.healthCode) {
+      console.error(`::error title=Chatwork token invalid::${message}`);
+    }
+    throw error;
+  }
+
   await ensureManualJudgments(accessToken, projectId);
   await run(process.execPath, ["scripts/fetch-chatwork.mjs"]);
 
@@ -249,6 +319,18 @@ async function main() {
       projectId,
       pathSegments: manualJudgmentPath,
       data: manualJudgmentData
+    }),
+    setSyncHealth({
+      accessToken,
+      projectId,
+      data: {
+        status: "ok",
+        code: "CHATWORK_TOKEN_OK",
+        message: "Chatwork APIトークンは有効です。",
+        checkedAt: new Date().toISOString(),
+        chatworkAccountId: chatworkAccount.account_id || null,
+        chatworkAccountName: chatworkAccount.name || ""
+      }
     })
   ]);
 
