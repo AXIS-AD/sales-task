@@ -568,6 +568,12 @@ textarea {
   color: var(--text);
 }
 
+input[readonly] {
+  color: var(--muted);
+  background: color-mix(in srgb, var(--muted) 8%, var(--panel));
+  cursor: default;
+}
+
 textarea {
   min-height: 78px;
   resize: vertical;

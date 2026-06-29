@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>営業部タスク管理ツール</title>
     <link rel="icon" type="image/png" href="./assets/browser-tab-logo-max.png?v=20260626-tab-logo-max">
-    <link rel="stylesheet" href="./styles.css?v=20260626-auth-theme-mobile">
+    <link rel="stylesheet" href="./styles.css?v=20260629-requester-name">
     <script src="./config.js"></script>
   </head>
   <body class="auth-pending">
@@ -157,7 +157,7 @@
         <section id="requestView" class="hidden">
           <form id="requestForm" class="request-form">
             <label>依頼者
-              <input id="requestRequester" type="text" autocomplete="name" required>
+              <input id="requestRequester" type="text" autocomplete="name" placeholder="ログイン中のGoogleアカウント名" readonly>
             </label>
             <label>内容
               <textarea id="requestBody" rows="5" required></textarea>
@@ -234,6 +234,6 @@
       </div>
     </aside>
 
-    <script type="module" src="./app.js?v=20260629-request-chatwork"></script>
+    <script type="module" src="./app.js?v=20260629-requester-name"></script>
   </body>
 </html>

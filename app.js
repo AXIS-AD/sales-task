@@ -177,13 +177,14 @@ function setAuthenticated(token, payload) {
   state.currentUser = {
     uid: payload.uid || "",
     email: payload.email || "",
-    name: payload.name || payload.email || ""
+    name: payload.name || payload.given_name || ""
   };
   if (token) localStorage.setItem(authTokenStorageKey, token);
   else localStorage.removeItem(authTokenStorageKey);
   document.body.classList.remove("auth-pending");
   elements.authOverlay.classList.add("hidden");
   elements.signedInUser.textContent = state.currentUser.email;
+  syncRequestRequester();
   elements.signOutButton.classList.remove("hidden");
   if (!state.dataLoaded) {
     loadData().catch((error) => {
@@ -201,6 +202,7 @@ function clearAuth(message = "") {
   document.body.classList.add("auth-pending");
   elements.authOverlay.classList.remove("hidden");
   elements.signedInUser.textContent = "";
+  syncRequestRequester();
   elements.signOutButton.classList.add("hidden");
   showAuthMessage(message);
 }
@@ -324,7 +326,7 @@ async function initFirebaseAuth() {
       setAuthenticated("", {
         uid: user.uid,
         email,
-        name: user.displayName || email
+        name: user.displayName || ""
       });
     });
   } catch (error) {
@@ -1929,6 +1931,7 @@ function renderSections() {
 }
 
 function render() {
+  syncRequestRequester();
   renderFilters();
   renderRooms();
   renderStats();
@@ -2014,13 +2017,28 @@ function handleRuleSubmit(event) {
   renderLearnedRules();
 }
 
+function googleAccountDisplayName() {
+  const name = String(state.currentUser?.name || "").trim();
+  return name && !name.includes("@") ? name : "";
+}
+
+function syncRequestRequester() {
+  if (!elements.requestRequester) return;
+  elements.requestRequester.value = googleAccountDisplayName();
+}
+
 function handleRequestSubmit(event) {
   event.preventDefault();
-  const requester = elements.requestRequester.value.trim();
+  const requester = googleAccountDisplayName();
   const body = elements.requestBody.value.trim();
   const priority = elements.requestPriority.value;
   const dueDate = elements.requestDueDate.value;
-  if (!requester || !body || !priority || !dueDate) return;
+  syncRequestRequester();
+  if (!requester) {
+    elements.requestMessage.textContent = "Googleアカウントの表示名を取得できませんでした。再ログインしてください。";
+    return;
+  }
+  if (!body || !priority || !dueDate) return;
 
   const id = crypto.randomUUID ? crypto.randomUUID() : `request-${Date.now()}`;
   const createdAt = new Date().toISOString();
@@ -2036,6 +2054,7 @@ function handleRequestSubmit(event) {
   });
   saveManualRequests();
   elements.requestForm.reset();
+  syncRequestRequester();
   elements.requestMessage.textContent = "ダッシュボードに追加しました。Chatworkタスク化待ちです。";
   state.activeSection = "dashboard";
   render();
