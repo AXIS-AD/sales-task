@@ -1,0 +1,34 @@
+name: Process Request Chatwork Tasks
+
+on:
+  schedule:
+    # GitHub Actions minimum practical interval. Runs near-real-time for request form submissions.
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: process-request-chatwork-tasks
+  cancel-in-progress: false
+
+jobs:
+  process:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+
+      - name: Process request form Chatwork tasks
+        run: npm run process:request-chatwork-tasks
+        env:
+          CHATWORK_API_TOKEN: ${{ secrets.CHATWORK_API_TOKEN }}
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          FIRESTORE_APP_PATH: salesTaskApps/abcClinic
+          CHATWORK_REQUEST_ROOM_ID: "416823106"
+          CHATWORK_REQUEST_ROOM_NAME: "営業部　〜ゾスの精神〜"
+          CHATWORK_REQUEST_ASSIGNEE_ID: "10345896"

@@ -7,6 +7,7 @@
     "start": "node scripts/serve.mjs",
     "fetch:chatwork": "node scripts/fetch-chatwork.mjs",
     "sync:chatwork-firestore": "node scripts/sync-chatwork-firestore.mjs",
+    "process:request-chatwork-tasks": "node scripts/process-request-chatwork-tasks.mjs",
     "deploy:firebase": "firebase deploy --only hosting,firestore:rules"
   }
 }

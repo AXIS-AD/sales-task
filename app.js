@@ -2023,17 +2023,20 @@ function handleRequestSubmit(event) {
   if (!requester || !body || !priority || !dueDate) return;
 
   const id = crypto.randomUUID ? crypto.randomUUID() : `request-${Date.now()}`;
+  const createdAt = new Date().toISOString();
   state.manualRequests.push({
     id,
     requester,
     body,
     priority,
     dueDate,
-    createdAt: new Date().toISOString()
+    createdAt,
+    chatworkTaskStatus: "pending",
+    chatworkTaskQueuedAt: createdAt
   });
   saveManualRequests();
   elements.requestForm.reset();
-  elements.requestMessage.textContent = "ダッシュボードに追加しました。";
+  elements.requestMessage.textContent = "ダッシュボードに追加しました。Chatworkタスク化待ちです。";
   state.activeSection = "dashboard";
   render();
 }
